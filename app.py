@@ -167,7 +167,7 @@ with st.sidebar:
             st.json(p.to_dict())
             
             if st.button("Visualize Timeline"):
-                events = p.behavioral_log
+                events = p.behavioral_signals
                 if events:
                     st.line_chart([e.get('amount', 0) for e in events])
                 else:
