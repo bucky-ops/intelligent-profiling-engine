@@ -1,4 +1,4 @@
-# Nexus Profile System 🚀
+# Intelligent Profiling Engine (Nexus) 🚀
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
@@ -37,8 +37,8 @@ A state-of-the-art **Intelligent Profiling Engine** that combines Unsupervised M
 ### 1. Installation
 Clone the repository and install dependencies:
 ```bash
-git clone https://github.com/YOUR_USERNAME/nexus-profile-system.git
-cd nexus-profile-system
+git clone https://github.com/bucky-ops/intelligent-profiling-engine.git
+cd intelligent-profiling-engine
 pip install -r requirements.txt
 pip install -e .
 ```
