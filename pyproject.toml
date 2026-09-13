@@ -31,7 +31,7 @@ dependencies = [
     "textblob>=0.17,<1",
     "sentence-transformers>=2.2,<4",
     "PyYAML>=6.0,<7",
-    "Faker>=20.0,<30",
+    "Faker>=20.0,<41",
     "streamlit>=1.30,<2",
 ]
 
