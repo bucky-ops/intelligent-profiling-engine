@@ -321,7 +321,7 @@ class ProfileSystemCLI:
     def run(self):
         print("Profile System CLI - Type 'help' for commands, 'exit' to quit.")
         self._history: List[str] = []
-        import readline  # noqa: F401  optional arrow-key history on POSIX
+        import readline  # noqa: F401,E402  optional arrow-key history on POSIX
         while True:
             try:
                 command = input(f"{self.current_mode}> ").strip()
@@ -562,7 +562,7 @@ Examples:
         for r in rows:
             print(f"{r['entity_id']:<30} {r['signals']:>8} {r['text_insights']:>6}  "
                   f"{r['updated_at'][:19]}")
-        print(f"─" * 65)
+        print("─" * 65)
         print(f"Total: {len(rows)} profiles")
 
     # --------------------------------------------------------------- import

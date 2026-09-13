@@ -6,7 +6,6 @@ from __future__ import annotations
 import io
 import contextlib
 import json
-import os
 
 import pytest
 
@@ -75,7 +74,7 @@ def test_export_csv(cli, tmp_path):
 
 
 def test_export_empty_fails_gracefully(cli, tmp_path):
-    out = _capture(cli, str(tmp_path / "out.json"))
+    _capture(cli, str(tmp_path / "out.json"))
     # The export command without a proper path triggers the usage message
     # (because tmp_path is treated as the entity_id arg). Test with export
     # when there are no profiles:

@@ -1,8 +1,6 @@
 """Tests for the Profiler service methods backing the new CLI commands."""
 from __future__ import annotations
 
-import json
-
 from profile_system.cli import Profiler
 
 
