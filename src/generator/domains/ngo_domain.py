@@ -1,6 +1,6 @@
 import uuid
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 from ..nlp import generate_synthetic_text
@@ -16,7 +16,7 @@ class NGODomainGenerator:
     def generate_record(self, region: str, country: str, seed: int = 0) -> Dict[str, Any]:
         entity_id = str(uuid.uuid4())
         profile_id = self._hash_entity(entity_id)
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         numeric_metrics = {
             "resource_allocation_score": round((seed % 100) / 100.0, 2),
             "vulnerability_index": round(((seed + 7) % 97) / 97.0, 2),

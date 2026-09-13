@@ -28,6 +28,9 @@ regions:
     countries: [BR, AR, MX]
     behavior_multiplier: 1.0
 
+# Domain-specific overrides. Previously these were wrongly nested under
+# `regions:`, which made the orchestrator treat them as bogus regions.
+domains:
   finance: {}
   ngo: {}
   telecom: {}

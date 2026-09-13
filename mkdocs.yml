@@ -1,0 +1,62 @@
+site_name: Intelligent Profiling Engine
+site_description: Hybrid ML + NLP + HITL profiling engine
+site_url: https://bucky-ops.github.io/intelligent-profiling-engine/
+repo_url: https://github.com/bucky-ops/intelligent-profiling-engine
+repo_name: bucky-ops/intelligent-profiling-engine
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - content.code.annotate
+  palette:
+    - scheme: default
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - Quick Start: quickstart.md
+  - API Reference:
+      - profile_system:
+          - Profile & EntityTracker: api/profile.md
+          - Clustering & AnomalyDetection: api/unsupervised.md
+          - NLP: api/nlp.md
+          - HITL: api/hitl.md
+      - generator: api/generator.md
+  - Contributing: contributing.md
+  - Security: security.md
+  - Changelog: changelog.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: true
+            show_root_heading: true
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - toc:
+      permalink: true

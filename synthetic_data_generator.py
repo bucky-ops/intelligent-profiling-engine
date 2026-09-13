@@ -24,12 +24,13 @@ import hashlib
 from datetime import datetime, timedelta
 import json
 from typing import Dict, List, Iterator
-import pandas as pd
 
 # For Spark compatibility, assume PySpark is available
 try:
     from pyspark.sql import SparkSession, DataFrame
-    from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType, BooleanType, TimestampType
+    from pyspark.sql.types import (
+        StructType, StructField, StringType, DoubleType, BooleanType,
+    )
     SPARK_AVAILABLE = True
 except ImportError:
     SPARK_AVAILABLE = False

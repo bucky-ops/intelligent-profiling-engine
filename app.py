@@ -3,18 +3,12 @@ import sys
 import os
 import io
 import contextlib
-import time
 from datetime import datetime
 
 # Ensure src is in python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 # Import system components
-from profile_system.profile import EntityTracker
-from profile_system.unsupervised import Clustering, AnomalyDetection
-from profile_system.nlp import NLPProcessor
-from profile_system.hitl import HITLFeedback
-from profile_system.logging_viz import log_event, Visualizer
 from profile_system.cli import ProfileSystemCLI
 
 # Page Configuration
@@ -147,7 +141,7 @@ with st.sidebar:
     st.title("Context Sidebar")
     
     # Active System Stats
-    tracker = st.session_state.system.tracker
+    tracker = st.session_state.system.profiler.tracker
     profile_count = len(tracker.profiles)
     
     st.markdown(f"""
@@ -159,7 +153,7 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    if st.session_state.system.tracker.profiles:
+    if st.session_state.system.profiler.tracker.profiles:
         st.subheader("Active Profiles")
         selected_profile = st.selectbox("Select Profile", list(tracker.profiles.keys()))
         if selected_profile:

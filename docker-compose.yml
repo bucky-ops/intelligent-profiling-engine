@@ -1,0 +1,35 @@
+services:
+  web:
+    build: .
+    image: intelligent-profiling-engine:latest
+    container_name: iprofile-web
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config:ro
+    environment:
+      - PROFILES_STORAGE_PATH=/app/data/profiles.json
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - SPACY_MODEL=${SPACY_MODEL:-en_core_web_sm}
+      - NLP_MODEL=${NLP_MODEL:-all-MiniLM-L6-v2}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # Optional: Spark worker for large-scale Parquet writes.
+  spark-master:
+    image: bitnami/spark:3.5
+    profiles: ["spark"]   # only starts with `docker compose --profile spark up`
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - ./data:/opt/bitnami/spark/data

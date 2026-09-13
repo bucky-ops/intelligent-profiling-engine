@@ -3,7 +3,6 @@
 This module enables components outside the orchestrator to benefit from the Spark-backed
 Parquet writer when available, while providing a clean fallback path when Spark is absent.
 """
-import json
 from typing import List, Dict, Any, Optional
 
 from .spark_generation import to_parquet_from_records

@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          python -m spacy download en_core_web_sm || true
+
+      - name: Lint with ruff
+        run: ruff check src tests
+
+      - name: Type-check with mypy
+        run: mypy src || true  # non-blocking until strict mode is enabled
+
+      - name: Run tests with coverage
+        run: pytest tests --cov=src/profile_system --cov-report=term-missing --cov-fail-under=60
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit bandit
+      - name: pip-audit (dependency vulnerabilities)
+        run: pip-audit -r requirements.txt --strict
+      - name: bandit (code security scan)
+        run: bandit -r src -q || true  # non-blocking

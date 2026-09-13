@@ -1,6 +1,6 @@
 """Terminal-style UI shim that wires to the orchestrator and a simple in-memory profiler."""
-import json
-from typing import Dict, List
+from typing import Dict
+
 from generator.config import ConfigLoader
 
 try:
@@ -63,8 +63,8 @@ def run_terminal_ui(config_path: str = "config/global_synthetic_config.yaml"):
             print(f"Streamed {len(batch)} records for {domain} {region}.")
         elif parts[0] == 'show':
             print(profiler.summarize())
-            else:
-                print("Unknown command. Type 'help'.")
+        else:
+            print("Unknown command. Type 'help'.")
 
 
 if __name__ == "__main__":

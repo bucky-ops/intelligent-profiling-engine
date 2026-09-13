@@ -1,6 +1,6 @@
 import uuid
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 from ..nlp import generate_synthetic_text
@@ -16,7 +16,7 @@ class TrafficDomainGenerator:
     def generate_record(self, region: str, country: str, seed: int = 0) -> Dict[str, Any]:
         entity_id = str(uuid.uuid4())
         profile_id = self._hash_entity(entity_id)
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         numeric_metrics = {
             "speed_index": max(1, int((seed % 100) + 20)),
             "congestion_level": (seed % 3) + 1,
