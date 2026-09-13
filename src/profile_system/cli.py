@@ -9,7 +9,9 @@ Refactored to:
 from __future__ import annotations
 
 import argparse
+import csv
 import json
+import os
 import shlex
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -111,6 +113,166 @@ class Profiler:
         )
         log_event("hitl_validation", {"entity_id": entity_id, "notes": notes})
 
+    # --------------------------------------------------------------- stats ---
+    def stats(self) -> Dict[str, Any]:
+        """Return a summary dict of the current engine state."""
+        profiles = self.tracker.profiles
+        total_signals = sum(len(p.behavioral_signals) for p in profiles.values())
+        total_validations = len(self.hitl.validations)
+        total_overrides = len(self.hitl.overrides)
+        entities_with_text = sum(
+            1 for p in profiles.values() if p.text_insights
+        )
+        return {
+            "profile_count": len(profiles),
+            "total_behavioral_signals": total_signals,
+            "avg_signals_per_profile": (
+                round(total_signals / len(profiles), 2) if profiles else 0
+            ),
+            "entities_with_text_insights": entities_with_text,
+            "hitl_validations": total_validations,
+            "hitl_overrides": total_overrides,
+            "storage_file": self.tracker.storage_file,
+        }
+
+    # --------------------------------------------------------------- list ----
+    def list_profiles(self) -> List[Dict[str, Any]]:
+        """Return a lightweight summary list of all profiles."""
+        result = []
+        for p in self.tracker.profiles.values():
+            result.append({
+                "entity_id": p.entity_id,
+                "signals": len(p.behavioral_signals),
+                "text_insights": len(p.text_insights),
+                "updated_at": p.updated_at.isoformat(),
+            })
+        return result
+
+    # --------------------------------------------------------------- import --
+    def import_profiles(self, path: str) -> int:
+        """Batch-import profiles from a CSV or JSON file.
+
+        CSV format: ``entity_id,amount,frequency,text`` (text optional).
+        JSON format: list of ``{"entity_id": ..., "behavioral": {...}, "text": ...}``.
+
+        Returns the number of profiles imported.
+        """
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Import file not found: {path}")
+        count = 0
+        ext = os.path.splitext(path)[1].lower()
+        if ext == ".csv":
+            with open(path, newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    entity_id = row.get("entity_id") or row.get("id")
+                    if not entity_id:
+                        continue
+                    data: Dict[str, Any] = {}
+                    behavioral: Dict[str, Any] = {}
+                    for k, v in row.items():
+                        if k in ("entity_id", "id"):
+                            continue
+                        if k == "text":
+                            data["text"] = {"sentiment": self.nlp.sentiment_analysis(v)}
+                            continue
+                        # try numeric
+                        try:
+                            behavioral[k] = float(v)
+                        except (ValueError, TypeError):
+                            behavioral[k] = v
+                    if behavioral:
+                        data["behavioral"] = behavioral
+                    self.tracker.update_profile(entity_id, data)
+                    count += 1
+        elif ext == ".json":
+            with open(path, encoding="utf-8") as f:
+                records = json.load(f)
+            if isinstance(records, dict):
+                # profiles.json format: {entity_id: {profile_dict}}
+                for eid, pdata in records.items():
+                    profile = self.tracker.get_or_create_profile(eid)
+                    profile.static_attributes = pdata.get("static_attributes", {})
+                    profile.behavioral_signals = pdata.get("behavioral_signals", [])
+                    profile.temporal_patterns = pdata.get("temporal_patterns", {})
+                    profile.text_insights = pdata.get("text_insights", {})
+                    count += 1
+            elif isinstance(records, list):
+                for rec in records:
+                    eid = rec.get("entity_id")
+                    if not eid:
+                        continue
+                    self.tracker.update_profile(eid, {
+                        k: rec[k] for k in ("static", "behavioral", "temporal", "text")
+                        if k in rec
+                    })
+                    count += 1
+        else:
+            raise ValueError(f"Unsupported import format: {ext}. Use .csv or .json")
+        self.tracker.save_profiles()
+        log_event("import_profiles", {"path": path, "count": count})
+        return count
+
+    # --------------------------------------------------------------- export --
+    def export_profiles(self, path: str) -> int:
+        """Export all profiles to CSV or JSON. Returns count exported."""
+        profiles = self.tracker.profiles
+        if not profiles:
+            raise ValueError("No profiles to export.")
+        ext = os.path.splitext(path)[1].lower()
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        if ext == ".csv":
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["entity_id", "signal_count", "total_amount",
+                                 "avg_amount", "sentiment_polarity", "updated_at"])
+                for p in profiles.values():
+                    amounts = [s.get("amount", 0) for s in p.behavioral_signals
+                               if "amount" in s]
+                    sentiment = p.text_insights.get("sentiment", {})
+                    writer.writerow([
+                        p.entity_id,
+                        len(p.behavioral_signals),
+                        sum(amounts),
+                        round(sum(amounts) / len(amounts), 2) if amounts else 0,
+                        sentiment.get("polarity", 0),
+                        p.updated_at.isoformat(),
+                    ])
+        elif ext == ".json":
+            data = {pid: p.to_dict() for pid, p in profiles.items()}
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, default=str)
+        else:
+            raise ValueError(f"Unsupported export format: {ext}. Use .csv or .json")
+        log_event("export_profiles", {"path": path, "count": len(profiles)})
+        return len(profiles)
+
+    # --------------------------------------------------------------- reset ---
+    def reset(self) -> int:
+        """Clear all profiles. Returns the number removed."""
+        count = len(self.tracker.profiles)
+        self.tracker.profiles.clear()
+        self.tracker.save_profiles()
+        log_event("reset", {"removed": count})
+        return count
+
+    # --------------------------------------------------------------- nlp ----
+    def analyze_text(self, entity_id: str, text: str) -> Dict[str, Any]:
+        """Run full NLP analysis on ``text`` and attach to ``entity_id``."""
+        sentiment = self.nlp.sentiment_analysis(text)
+        try:
+            entities = self.nlp.extract_entities(text)
+        except Exception:
+            entities = []
+        insight = {
+            "sentiment": sentiment,
+            "entities": entities,
+            "text": text[:200],
+        }
+        self.tracker.update_profile(entity_id, {"text": insight})
+        log_event("nlp_analysis", {"entity_id": entity_id})
+        return insight
+
 
 def _parse_kv(token: str) -> Tuple[str, str]:
     """Parse a ``key:value`` token, raising ``ValueError`` on bad input."""
@@ -158,6 +320,8 @@ class ProfileSystemCLI:
 
     def run(self):
         print("Profile System CLI - Type 'help' for commands, 'exit' to quit.")
+        self._history: List[str] = []
+        import readline  # noqa: F401  optional arrow-key history on POSIX
         while True:
             try:
                 command = input(f"{self.current_mode}> ").strip()
@@ -165,8 +329,12 @@ class ProfileSystemCLI:
                     continue
                 if command.lower() == "exit":
                     break
+                self._history.append(command)
                 self.process_command(command)
             except KeyboardInterrupt:
+                print("\nExiting...")
+                break
+            except EOFError:
                 print("\nExiting...")
                 break
             except Exception as e:
@@ -179,39 +347,54 @@ class ProfileSystemCLI:
         cmd = parts[0].lower()
         args = parts[1:]
 
-        if cmd == "help":
-            self.show_help()
-        elif cmd == "profile":
-            self.handle_profile(args)
-        elif cmd == "cluster":
-            self.handle_cluster(args)
-        elif cmd == "analyze":
-            self.handle_analyze(args)
-        elif cmd == "visualize":
-            self.handle_visualize(args)
-        elif cmd == "mode":
-            self.handle_mode(args)
-        elif cmd == "sidebar":
-            self.toggle_sidebar()
-        elif cmd == "hitl":
-            self.handle_hitl(args)
-        else:
+        handler = {
+            "help": lambda a: self.show_help(),
+            "profile": self.handle_profile,
+            "cluster": self.handle_cluster,
+            "analyze": self.handle_analyze,
+            "visualize": self.handle_visualize,
+            "mode": self.handle_mode,
+            "sidebar": lambda a: self.toggle_sidebar(),
+            "hitl": self.handle_hitl,
+            "stats": lambda a: self.handle_stats(),
+            "list": lambda a: self.handle_list(),
+            "import": self.handle_import,
+            "export": self.handle_export,
+            "reset": lambda a: self.handle_reset(),
+            "nlp": self.handle_nlp,
+        }.get(cmd)
+        if handler is None:
             print(f"⚠ Unknown command: {cmd}. Type 'help' for options.")
+            return
+        handler(args)
 
     def show_help(self):
         print("""
 Available Commands:
-- profile <id>                          Show a profile
-- profile <id> update --behavior k:v    Add a behavioral signal (e.g. --behavior amount:100)
-- profile <id> update --text "<text>"   Add NLP insight from free text
-- cluster [--n <k>]                      Run K-Means clustering
-- analyze anomalies                      Detect anomalies via Isolation Forest
-- visualize <id>                         Plot behavioral timeline for an entity
-- mode <mode>                            Switch mode (analysis, audit)
-- sidebar                                Toggle sidebar
-- hitl validate <id> <notes>            Add HITL validation
-- help                                   Show this help
-- exit                                   Quit
+  profile <id>                          Show a profile
+  profile <id> update --behavior k:v    Add a behavioral signal (e.g. --behavior amount:100)
+  profile <id> update --text "<text>"   Add NLP insight from free text
+  cluster [--n <k>]                      Run K-Means clustering
+  analyze anomalies                      Detect anomalies via Isolation Forest
+  visualize <id>                         Plot behavioral timeline for an entity
+  nlp <id> "<text>"                      Run full NLP analysis (sentiment + NER)
+  hitl validate <id> <notes>             Add HITL validation
+  list                                   List all profiles (summary)
+  stats                                  Show engine statistics
+  import <file.csv|file.json>            Batch-import profiles
+  export <file.csv|file.json>            Export all profiles
+  reset                                  Clear all profiles (destructive!)
+  mode <mode>                            Switch mode (analysis, audit)
+  sidebar                                Toggle sidebar
+  help                                   Show this help
+  exit                                   Quit
+
+Examples:
+  profile CUST-1 update --behavior amount:100 --behavior frequency:5
+  nlp CUST-1 "Large transaction reported, looks suspicious"
+  import data/customers.csv
+  export data/export.json
+  stats
         """)
 
     # --------------------------------------------------------------- profile
@@ -352,6 +535,88 @@ Available Commands:
         notes = " ".join(ns.notes) if ns.notes else ""
         self.profiler.add_validation(ns.entity_id, notes)
         print(f"✔ HITL validation added for {ns.entity_id}")
+
+    # ----------------------------------------------------------------- stats
+    def handle_stats(self):
+        s = self.profiler.stats()
+        print("═" * 45)
+        print("  Engine Statistics")
+        print("═" * 45)
+        print(f"  Profiles tracked        : {s['profile_count']}")
+        print(f"  Total behavioral signals: {s['total_behavioral_signals']}")
+        print(f"  Avg signals / profile   : {s['avg_signals_per_profile']}")
+        print(f"  Entities w/ text insights: {s['entities_with_text_insights']}")
+        print(f"  HITL validations        : {s['hitl_validations']}")
+        print(f"  HITL overrides          : {s['hitl_overrides']}")
+        print(f"  Storage file            : {s['storage_file']}")
+        print("═" * 45)
+
+    # ------------------------------------------------------------------ list
+    def handle_list(self):
+        rows = self.profiler.list_profiles()
+        if not rows:
+            print("⚠ No profiles. Create one with: profile <id> update --behavior amount:100")
+            return
+        print(f"{'Entity ID':<30} {'Signals':>8} {'Text':>6}  Updated")
+        print("─" * 65)
+        for r in rows:
+            print(f"{r['entity_id']:<30} {r['signals']:>8} {r['text_insights']:>6}  "
+                  f"{r['updated_at'][:19]}")
+        print(f"─" * 65)
+        print(f"Total: {len(rows)} profiles")
+
+    # --------------------------------------------------------------- import
+    def handle_import(self, args: List[str]):
+        if not args:
+            print("⚠ Usage: import <file.csv|file.json>")
+            return
+        path = args[0]
+        try:
+            count = self.profiler.import_profiles(path)
+            print(f"✔ Imported {count} profiles from {path}")
+        except (FileNotFoundError, ValueError) as e:
+            print(f"✖ {e}")
+
+    # --------------------------------------------------------------- export
+    def handle_export(self, args: List[str]):
+        if not args:
+            print("⚠ Usage: export <file.csv|file.json>")
+            return
+        path = args[0]
+        try:
+            count = self.profiler.export_profiles(path)
+            print(f"✔ Exported {count} profiles to {path}")
+        except (ValueError, OSError) as e:
+            print(f"✖ {e}")
+
+    # ---------------------------------------------------------------- reset
+    def handle_reset(self):
+        count = self.profiler.reset()
+        print(f"✔ Reset complete. Removed {count} profiles.")
+
+    # ------------------------------------------------------------------ nlp
+    def handle_nlp(self, args: List[str]):
+        parser = argparse.ArgumentParser(prog="nlp", add_help=False)
+        parser.add_argument("entity_id")
+        parser.add_argument("text")
+        try:
+            ns = parser.parse_args(args)
+        except SystemExit:
+            print("⚠ Usage: nlp <id> \"<text>\"")
+            return
+        try:
+            insight = self.profiler.analyze_text(ns.entity_id, ns.text)
+            print(f"✔ NLP analysis attached to {ns.entity_id}:")
+            print(f"  Sentiment polarity  : {insight['sentiment']['polarity']:.3f}")
+            print(f"  Sentiment subjectivity: {insight['sentiment']['subjectivity']:.3f}")
+            if insight.get("entities"):
+                print("  Entities            :")
+                for ent_text, ent_label in insight["entities"]:
+                    print(f"    - {ent_text} ({ent_label})")
+            else:
+                print("  Entities            : (none detected)")
+        except Exception as e:
+            print(f"✖ NLP analysis failed: {e}")
 
 
 if __name__ == "__main__":
